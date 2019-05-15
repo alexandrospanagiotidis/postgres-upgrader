@@ -4,10 +4,10 @@ services:
   postgres_upgrade:
     build:
       context: ./build
-    env_file:
-      - ./db.env
+#    env_file:
+#      - ./db.env
     environment:
-      - PGUSER=postgres
+#      - POSTGRES_USER=postgres
       - NEW_VERSION=11
     volumes:
       - ./old:/old

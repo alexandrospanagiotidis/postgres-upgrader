@@ -4,14 +4,12 @@ set -o errexit -o nounset -o pipefail -o xtrace
 
 WORKDIR="/work"
 
-# These are the same names as used by pg_upgrade
-export PGUSER="${PGUSER:-${POSTGRES_USER:-postgres}}"
-
+# Export some of values so we do not need to pass arguments to pg_upgrade
+export PGUSER="${POSTGRES_USER:-postgres}"
 export PGDATAOLD="/old"
 export PGDATANEW="/work/new"
 
 PG_VERSION_OLD="${PGDATAOLD}/PG_VERSION"
-# Use version from PG_VERSION file if OLD_VERSION is not set
 OLD_VERSION="${OLD_VERSION:-$(cat "${PG_VERSION_OLD}")}"
 
 export PGBINOLD="/usr/lib/postgresql/${OLD_VERSION}/bin"
