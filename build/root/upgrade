@@ -61,8 +61,8 @@ run_as_postgres() {
 
 (
 cd "${WORKDIR}"
-run_as_postgres echo "${POSTGRES_PASSWORD}" > "${INITDB_PWFILE}"
-run_as_postgres "${PGBINNEW}/initdb" -U "${PGUSER}" --pwfile="${INITDB_PWFILE}" "${PGDATANEW}"
+[ ${POSTGRES_PASSWORD+x} ] && run_as_postgres echo "${POSTGRES_PASSWORD}" > "${INITDB_PWFILE}"
+run_as_postgres "${PGBINNEW}/initdb" -U "${PGUSER}" ${POSTGRES_PASSWORD:+--pwfile="${INITDB_PWFILE}"} "${PGDATANEW}"
 run_as_postgres "${PGBINNEW}/pg_upgrade" ${RETAIN_UPGRADE_LOGS:+--retain}
 run_as_postgres cp -f \
   "${PGDATAOLD}/postgresql.conf" \
