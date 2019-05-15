@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  postgres_upgrade:
+    build:
+      context: ./build
+    env_file:
+      - ./db.env
+    environment:
+      - NEW_VERSION=11
+    volumes:
+      - ./old:/old
+      - ./work:/work

@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+
+set -o errexit -o nounset -o pipefail -o xtrace
+
+WORKDIR="/work"
+
+# These are the same names as used by pg_upgrade
+export PGUSER="${PGUSER:-${POSTGRES_USER:-postgres}}"
+
+export PGDATAOLD="/old"
+export PGDATANEW="/work/new"
+
+PG_VERSION_OLD="${PGDATAOLD}/PG_VERSION"
+# Use version from PG_VERSION file if OLD_VERSION is not set
+OLD_VERSION="${OLD_VERSION:-$(cat "${PG_VERSION_OLD}")}"
+
+export PGBINOLD="/usr/lib/postgresql/${OLD_VERSION}/bin"
+export PGBINNEW="/usr/lib/postgresql/${NEW_VERSION}/bin"
+
+REFERENCE_FILE="${WORKDIR}/PG_VERSION.old"
+INITDB_PWFILE="${WORKDIR}/initdb-pwfile"
+
+export DEBIAN_FRONTEND=noninteractive
+
+# Fetch package lists but ignore that we cannot yet verify the signature of the postgres repository
+apt-get update || true
+
+# Install dependencies
+apt-get install -y --no-install-recommends \
+  gnupg2 \
+  dirmngr \
+  sudo \
+  locales
+
+# See https://github.com/docker-library/postgres/issues/415
+# and the Dockerfile at https://github.com/docker-library/postgres
+localedef -i en_US -f UTF-8 en_US.UTF-8
+export LANG=en_US.utf8
+
+# Install both old and new PostgreSQL
+apt-key add /ACCC4CF8.asc
+apt-get update
+apt-get install -y --no-install-recommends \
+  "postgresql-${OLD_VERSION}" \
+  "postgresql-${NEW_VERSION}"
+
+rm -rf "${PGDATANEW}"
+chown postgres "${WORKDIR}"
+cp --preserve -f "${PG_VERSION_OLD}" "${REFERENCE_FILE}"
+
+at_exit() {
+  chown -R --reference="${REFERENCE_FILE}" "${PGDATAOLD}" "${PGDATANEW}"
+}
+
+trap at_exit EXIT
+chown -R postgres "${PGDATAOLD}"
+
+run_as_postgres() {
+  sudo -E -u postgres "${@}"
+}
+
+(
+cd "${WORKDIR}"
+run_as_postgres echo "${POSTGRES_PASSWORD}" > "${INITDB_PWFILE}"
+run_as_postgres "${PGBINNEW}/initdb" -U "${PGUSER}" --pwfile="${INITDB_PWFILE}" "${PGDATANEW}"
+run_as_postgres "${PGBINNEW}/pg_upgrade" ${RETAIN_UPGRADE_LOGS:+--retain}
+run_as_postgres cp -f \
+  "${PGDATAOLD}/postgresql.conf" \
+  "${PGDATAOLD}/pg_hba.conf" \
+  "${PGDATAOLD}/pg_ident.conf" \
+  "${PGDATANEW}"
+run_as_postgres "${PGBINNEW}/pg_ctl" -D "${PGDATANEW}" -l "${WORKDIR}/analyze.log" -w start
+run_as_postgres "${WORKDIR}/analyze_new_cluster.sh"
+run_as_postgres "${PGBINNEW}/pg_ctl" -D "${PGDATANEW}" -l "${WORKDIR}/analyze.log" -w stop
+)
+
+# at_exit will fix the permissions in PGDATAOLD and -NEW
